@@ -248,6 +248,74 @@
     }
     #help h3 { font-size: 0.78rem; color: #6a7784; margin-bottom: 4px; }
 
+    /* ========== ログ（折りたたみ） ========== */
+    #log-panel {
+      width: 100%;
+      max-width: 680px;
+      padding: 0 12px;
+      margin-top: 4px;
+    }
+    #log-panel summary {
+      list-style: none;
+      cursor: pointer;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    #log-panel summary::-webkit-details-marker { display: none; }
+    /* 開閉インジケーター */
+    #log-panel summary::before {
+      content: '▶';
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-right: 6px;
+      transition: transform 0.15s;
+    }
+    #log-panel[open] summary::before { transform: rotate(90deg); }
+    #log-panel summary span:first-of-type { flex: 1; }
+    #log-count { font-size: 0.7rem; color: var(--muted); font-weight: 400; }
+    #log-body {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      padding: 8px 12px 10px;
+    }
+    #log-list {
+      max-height: 240px;
+      overflow-y: auto;
+      font-size: 0.74rem;
+      line-height: 1.5;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    }
+    #log-list:empty::after {
+      content: 'まだログはありません';
+      color: var(--muted);
+      font-family: system-ui;
+    }
+    .log-row {
+      display: flex;
+      gap: 8px;
+      padding: 2px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .log-time { color: var(--muted); flex-shrink: 0; }
+    .log-row.t-warn .log-msg { color: var(--yellow); }
+    .log-row.t-info .log-msg { color: var(--text); }
+    .log-row.t-result .log-msg { color: var(--blue); }
+    #btn-log-clear {
+      margin-top: 8px;
+      font-size: 0.72rem;
+      padding: 4px 10px;
+    }
+
     /* ========== レスポンシブ ========== */
     @media (max-width: 480px) {
       .mval { font-size: 1.3rem; }
@@ -287,6 +355,8 @@
   <button id="btn-sound">🔇 音: オフ</button>
   <button class="mode-btn sel" id="btn-metro">🎵 メトロノーム</button>
   <button class="mode-btn" id="btn-feedback">⚡ 速遅判定</button>
+  <span class="sep"></span>
+  <button id="btn-reset">🔄 リセット</button>
 </div>
 
 <!-- アラート -->
@@ -361,6 +431,18 @@
   </div>
 </div>
 
+<!-- ログ（折りたたみ可能） -->
+<details id="log-panel">
+  <summary>
+    <span>📋 ログ</span>
+    <span id="log-count">0件</span>
+  </summary>
+  <div id="log-body">
+    <div id="log-list"></div>
+    <button id="btn-log-clear">ログを消去</button>
+  </div>
+</details>
+
 <!-- ヘルプ -->
 <div id="help">
   <h3>🎯 JRC蘇生ガイドライン 2025（参考目標値）</h3>
@@ -400,6 +482,10 @@ const btnStart    = document.getElementById('btn-start');
 const btnSound    = document.getElementById('btn-sound');
 const btnMetro    = document.getElementById('btn-metro');
 const btnFeedback = document.getElementById('btn-feedback');
+const btnReset    = document.getElementById('btn-reset');
+const elLogList   = document.getElementById('log-list');
+const elLogCount  = document.getElementById('log-count');
+const btnLogClear = document.getElementById('btn-log-clear');
 
 // 指標
 const elBpm      = document.getElementById('m-bpm');
@@ -1042,12 +1128,47 @@ function showAlert(msg, durationMs = 4000) {
     div.textContent = msg;
     elAlerts.appendChild(div);
     activeAlerts.set(msg, { el: div, timer: null });
+    // 新規アラート時のみログに記録（同一メッセージの毎フレーム重複は除外）
+    logEvent(msg, 'warn');
   }
   const entry = activeAlerts.get(msg);
   entry.timer = setTimeout(() => {
     entry.el.remove();
     activeAlerts.delete(msg);
   }, durationMs);
+}
+
+// ------------------------------------------------------------------
+// ログ（折りたたみパネルに時刻付きで蓄積）
+// ------------------------------------------------------------------
+let logCount = 0;
+function logEvent(msg, type = 'info') {
+  logCount++;
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+
+  const row = document.createElement('div');
+  row.className = `log-row t-${type}`;
+  row.innerHTML =
+    `<span class="log-time">${hh}:${mm}:${ss}</span><span class="log-msg">${escapeHtml(msg)}</span>`;
+  elLogList.appendChild(row);
+  // 最新行が見えるよう自動スクロール
+  elLogList.scrollTop = elLogList.scrollHeight;
+  elLogCount.textContent = `${logCount}件`;
+}
+
+function clearLog() {
+  elLogList.innerHTML = '';
+  logCount = 0;
+  elLogCount.textContent = '0件';
+}
+
+// XSS対策（メッセージは内製文字列だが念のためエスケープ）
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // ------------------------------------------------------------------
@@ -1088,6 +1209,39 @@ function stopMetronome() {
 // ------------------------------------------------------------------
 // セッション開始/停止
 // ------------------------------------------------------------------
+// 計測データ・表示をすべて初期状態に戻す（カメラのオン/オフには触れない）
+function resetState() {
+  // 信号処理バッファ
+  yBuf = []; intervals = [];
+  prevSmoothY = null; prevDy = 0; smoothY = null;
+  lastCompTime = null; lastPeakY = null; lastValleyY = null; emaAmp = null;
+  // セッション集計
+  session = { startMs: Date.now(), angles: [], bpms: [], recoils: [], scores: [], compressions: 0 };
+  // アラート消去
+  activeAlerts.forEach(e => e.el.remove());
+  activeAlerts.clear();
+  // セッション結果パネルを隠す
+  document.getElementById('session-result').style.display = 'none';
+
+  // --- 表示のリセット ---
+  elCompCnt.textContent = '圧迫: 0回';
+  elBpm.textContent = '--';    elBpm.className = 'mval col-dim';
+  elBpmSt.textContent = '計測中...'; elBpmSt.className = 'mstatus col-dim';
+  elAngle.textContent = '--';  elAngle.className = 'mval col-dim';
+  elAngleSt.textContent = '-'; elAngleSt.className = 'mstatus col-dim';
+  elRhythm.textContent = '--'; elRhythm.className = 'mval col-dim';
+  elRhythmSt.textContent = '-'; elRhythmSt.className = 'mstatus col-dim';
+  elDepth.textContent = '0';   elDepthFil.style.width = '0%'; elDepthFil.style.background = 'var(--muted)';
+  elDepthSt.textContent = '-'; elDepthSt.className = 'mstatus col-dim';
+  elBpmOVal.textContent = '--';
+  // スコア
+  elTotal.textContent = '--'; elTotal.className = 'col-dim';
+  elGrade.textContent = '計測中...'; elGrade.className = 'col-dim';
+  elSTempo.textContent = '--';  elSTempo.className = 'sval col-dim';
+  elSAngle.textContent = '--';  elSAngle.className = 'sval col-dim';
+  elSRecoil.textContent = '--'; elSRecoil.className = 'sval col-dim';
+}
+
 async function startSession() {
   if (!poseLandmarker) {
     showAlert('MediaPipe がまだ初期化中です。しばらくお待ちください。', 5000);
@@ -1096,21 +1250,16 @@ async function startSession() {
   const ok = await startCamera();
   if (!ok) return;
 
-  // 状態リセット
-  yBuf = []; intervals = [];
-  prevSmoothY = null; prevDy = 0; smoothY = null;
-  lastCompTime = null; lastPeakY = null; lastValleyY = null; emaAmp = null;
-  session = { startMs: Date.now(), angles: [], bpms: [], recoils: [], scores: [], compressions: 0 };
-  activeAlerts.forEach(e => e.el.remove());
-  activeAlerts.clear();
-  document.getElementById('session-result').style.display = 'none';
-  elCompCnt.textContent = '圧迫: 0回';
+  // 計測状態を初期化
+  resetState();
 
   isRunning = true;
   btnStart.textContent = '■ 停止';
   btnStart.classList.add('stop');
   setStatus('解析中...');
   elBpmOver.style.display = 'block';
+
+  logEvent('▶ 解析を開始しました', 'info');
 
   if (soundOn && soundMode === 'metro') startMetronome();
   startLoop();
@@ -1157,6 +1306,13 @@ function showSessionResult() {
   const sT = calcScoreTempo();
   const sA = avgAngle !== null ? calcScoreAngle(avgAngle) : null;
   const sR = recoilPct;
+
+  // ログにセッション結果のサマリを残す
+  logEvent(
+    `■ 停止 ｜ 平均${avgScore ?? '--'}点 ｜ ${session.compressions}回 ｜ ` +
+    `${avgBPM ?? '--'}bpm ｜ 角度${avgAngle ?? '--'}° ｜ リコイル${recoilPct ?? '--'}%`,
+    'result'
+  );
 
   document.getElementById('session-content').innerHTML = `
     <div class="result-grid">
@@ -1245,6 +1401,18 @@ btnFeedback.addEventListener('click', () => {
   btnMetro.classList.remove('sel');
   stopMetronome();
 });
+
+// リセット：計測データとスコアをその場でクリアする。
+// 解析中ならカメラは止めずに計測だけやり直す。停止中なら表示を初期化する。
+btnReset.addEventListener('click', () => {
+  resetState();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  setStatus(isRunning ? '解析中...（リセットしました）' : '停止中');
+  showAlert('計測をリセットしました', 2000);
+});
+
+// ログ消去
+btnLogClear.addEventListener('click', clearLog);
 
 // ------------------------------------------------------------------
 // 起動
