@@ -480,11 +480,13 @@ async function initMediaPipe() {
     const vision = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
     );
-    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+
+    // モデル生成オプションを返すヘルパー（delegate を差し替えられるように）
+    const makeOptions = (delegate) => ({
       baseOptions: {
         modelAssetPath:
           "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-        delegate: "GPU",
+        delegate,
       },
       runningMode: "VIDEO",
       numPoses: 1,
@@ -492,6 +494,15 @@ async function initMediaPipe() {
       minPosePresenceConfidence: 0.45,
       minTrackingConfidence: 0.45,
     });
+
+    // まず GPU で試し、失敗したら CPU にフォールバックする。
+    // iOS Safari など一部端末では GPU デリゲートが不安定なため。
+    try {
+      poseLandmarker = await PoseLandmarker.createFromOptions(vision, makeOptions("GPU"));
+    } catch (gpuErr) {
+      console.warn('GPU デリゲート失敗 → CPU で再試行します', gpuErr);
+      poseLandmarker = await PoseLandmarker.createFromOptions(vision, makeOptions("CPU"));
+    }
     setStatus('準備完了 ▶ 開始を押してください');
   } catch (e) {
     setStatus('エラー: MediaPipe 読み込み失敗');
