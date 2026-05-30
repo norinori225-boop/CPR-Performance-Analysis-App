@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>CPR フォーム練習アシスタント</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1e2530;
+      --border: #30363d;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --blue: #58a6ff;
+      --text: #c9d1d9;
+      --muted: #8b949e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ========== ヘッダー ========== */
+    header {
+      width: 100%;
+      max-width: 680px;
+      background: var(--surface);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1rem; letter-spacing: 0.02em; }
+    #comp-count { font-size: 0.8rem; color: var(--muted); }
+
+    /* ========== 設置ガイド ========== */
+    #guide {
+      width: 100%;
+      max-width: 680px;
+      background: #0c2d48;
+      padding: 7px 16px;
+      font-size: 0.78rem;
+      color: #7ec8e3;
+      text-align: center;
+      border-bottom: 1px solid #1a4a6e;
+    }
+
+    /* ========== 映像エリア ========== */
+    #video-wrap {
+      width: 100%;
+      max-width: 680px;
+      position: relative;
+      background: #000;
+      aspect-ratio: 4/3;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    #canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #status-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.72);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    #bpm-overlay {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0,0,0,0.72);
+      border-radius: 6px;
+      padding: 4px 10px;
+      text-align: center;
+      display: none;
+    }
+    #bpm-overlay-val { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+    #bpm-overlay-label { font-size: 0.6rem; color: var(--muted); }
+
+    /* ========== コントロール ========== */
+    #controls {
+      width: 100%;
+      max-width: 680px;
+      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    button {
+      padding: 7px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: var(--surface2);
+      color: var(--text);
+      transition: 0.15s;
+      white-space: nowrap;
+    }
+    button:hover { opacity: 0.85; }
+    #btn-start { background: var(--green); color: #0d1117; border-color: var(--green); min-width: 90px; }
+    #btn-start.stop { background: var(--red); border-color: var(--red); color: #fff; }
+    #btn-sound.on { background: #5a3e1b; border-color: var(--yellow); color: var(--yellow); }
+    .mode-btn.sel { background: #1a3a5c; border-color: var(--blue); color: var(--blue); }
+    #controls .sep { flex: 1; }
+
+    /* ========== アラート ========== */
+    #alerts {
+      width: 100%;
+      max-width: 680px;
+      padding: 0 12px;
+      min-height: 0;
+    }
+    .alert-item {
+      background: rgba(248,81,73,0.12);
+      border: 1px solid rgba(248,81,73,0.4);
+      border-radius: 5px;
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      margin-top: 6px;
+      animation: fadeIn 0.3s;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ========== 指標パネル ========== */
+    #metrics {
+      width: 100%;
+      max-width: 680px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .mcard {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .mcard.wide { grid-column: 1 / -1; }
+    .mlabel { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
+    .mval { font-size: 1.7rem; font-weight: 700; line-height: 1; }
+    .munit { font-size: 0.65rem; color: var(--muted); }
+    .mstatus { font-size: 0.68rem; margin-top: 3px; }
+    .col-ok  { color: var(--green); }
+    .col-warn{ color: var(--yellow); }
+    .col-bad { color: var(--red); }
+    .col-dim { color: var(--muted); }
+
+    /* 深さゲージ */
+    #depth-row { display:flex; align-items:center; gap:8px; width:100%; }
+    #depth-labels { display:flex; justify-content:space-between; font-size:0.65rem; color:var(--muted); margin-top:3px; }
+    .gbar { flex:1; height:10px; background:#2a2a2a; border-radius:5px; overflow:hidden; }
+    .gfill { height:100%; border-radius:5px; transition: width 0.12s ease, background 0.3s; }
+
+    /* リズムばらつき表示 */
+    #rhythm-row { font-size:0.7rem; color:var(--muted); margin-top:3px; }
+
+    /* ========== スコアパネル ========== */
+    #score-wrap {
+      width: 100%;
+      max-width: 680px;
+      padding: 0 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #total-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #total-label { font-size: 0.75rem; color: var(--muted); }
+    #total-val { font-size: 3.2rem; font-weight: 800; line-height: 1; }
+    #total-grade { font-size: 0.85rem; margin-top: 2px; }
+    #sub-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .scard {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+    }
+    .slabel { font-size: 0.63rem; color: var(--muted); }
+    .sval { font-size: 1.4rem; font-weight: 700; }
+
+    /* ========== セッション結果 ========== */
+    #session-result {
+      display: none;
+      width: 100%;
+      max-width: 680px;
+      padding: 0 12px 12px;
+    }
+    #session-box {
+      background: var(--surface);
+      border: 1px solid var(--blue);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    #session-box h2 { font-size: 0.95rem; margin-bottom: 12px; color: var(--blue); }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .result-big { text-align: center; }
+    .result-big .rb-label { font-size: 0.72rem; color: var(--muted); }
+    .result-big .rb-val { font-size: 2.2rem; font-weight: 800; }
+    .result-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .result-table td { padding: 5px 0; border-bottom: 1px solid var(--border); }
+    .result-table td:last-child { text-align: right; font-weight: 600; }
+    .result-table td.rlabel { color: var(--muted); }
+
+    /* ========== ヘルプ ========== */
+    #help {
+      width: 100%;
+      max-width: 680px;
+      padding: 10px 16px 20px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    #help h3 { font-size: 0.78rem; color: #6a7784; margin-bottom: 4px; }
+
+    /* ========== レスポンシブ ========== */
+    @media (max-width: 480px) {
+      .mval { font-size: 1.3rem; }
+      #total-val { font-size: 2.4rem; }
+      #metrics { grid-template-columns: 1fr 1fr; }
+      .mcard.wide { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<header>
+  <h1>💓 CPR フォーム練習アシスタント</h1>
+  <span id="comp-count">圧迫: 0回</span>
+</header>
+
+<!-- 設置ガイド -->
+<div id="guide">
+  📷 設置ガイド：スマホを真横（側面）に固定し、施術者の肩・肘・手首が映るように調整してください
+</div>
+
+<!-- 映像エリア -->
+<div id="video-wrap">
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="canvas"></canvas>
+  <div id="status-badge" id="status-badge">準備中...</div>
+  <div id="bpm-overlay">
+    <div id="bpm-overlay-val">--</div>
+    <div id="bpm-overlay-label">bpm</div>
+  </div>
+</div>
+
+<!-- コントロール -->
+<div id="controls">
+  <button id="btn-start">▶ 開始</button>
+  <button id="btn-sound">🔇 音: オフ</button>
+  <button class="mode-btn sel" id="btn-metro">🎵 メトロノーム</button>
+  <button class="mode-btn" id="btn-feedback">⚡ 速遅判定</button>
+</div>
+
+<!-- アラート -->
+<div id="alerts"></div>
+
+<!-- 指標パネル -->
+<div id="metrics">
+  <!-- テンポ -->
+  <div class="mcard">
+    <div class="mlabel">テンポ</div>
+    <div class="mval col-dim" id="m-bpm">--</div>
+    <div class="munit">bpm</div>
+    <div class="mstatus col-dim" id="m-bpm-st">計測中...</div>
+  </div>
+  <!-- 肘角度 -->
+  <div class="mcard">
+    <div class="mlabel">肘の角度</div>
+    <div class="mval col-dim" id="m-angle">--</div>
+    <div class="munit">°</div>
+    <div class="mstatus col-dim" id="m-angle-st">-</div>
+  </div>
+  <!-- リズムばらつき -->
+  <div class="mcard">
+    <div class="mlabel">リズム安定性</div>
+    <div class="mval col-dim" id="m-rhythm">--</div>
+    <div class="munit">SD(ms)</div>
+    <div class="mstatus col-dim" id="m-rhythm-st">-</div>
+  </div>
+  <!-- 深さゲージ（参考値・横幅full） -->
+  <div class="mcard wide">
+    <div class="mlabel">深さ（参考値・絶対cm値ではありません）</div>
+    <div id="depth-row">
+      <span style="font-size:0.65rem;color:var(--muted);">浅</span>
+      <div class="gbar"><div class="gfill" id="depth-fill" style="width:0%;background:var(--muted)"></div></div>
+      <span style="font-size:0.65rem;color:var(--muted);">深</span>
+      <span style="font-size:0.85rem;font-weight:700;min-width:28px;text-align:right;" id="m-depth">0</span>
+    </div>
+    <div class="mstatus col-dim" id="m-depth-st">-</div>
+  </div>
+</div>
+
+<!-- スコアパネル -->
+<div id="score-wrap">
+  <div id="total-card">
+    <div>
+      <div id="total-label">総合スコア（リアルタイム）</div>
+      <div id="total-grade" class="col-dim">-</div>
+    </div>
+    <div id="total-val" class="col-dim">--</div>
+  </div>
+  <div id="sub-row">
+    <div class="scard">
+      <div class="slabel">テンポ 40%</div>
+      <div class="sval col-dim" id="s-tempo">--</div>
+    </div>
+    <div class="scard">
+      <div class="slabel">角度 30%</div>
+      <div class="sval col-dim" id="s-angle">--</div>
+    </div>
+    <div class="scard">
+      <div class="slabel">リコイル 30%</div>
+      <div class="sval col-dim" id="s-recoil">--</div>
+    </div>
+  </div>
+</div>
+
+<!-- セッション結果 -->
+<div id="session-result">
+  <div id="session-box">
+    <h2>📊 セッション結果</h2>
+    <div id="session-content"></div>
+  </div>
+</div>
+
+<!-- ヘルプ -->
+<div id="help">
+  <h3>🎯 JRC蘇生ガイドライン 2025（参考目標値）</h3>
+  <p>・深さ: 約5cm（6cmを超えない） ／ テンポ: 100〜120回/分</p>
+  <p>・毎回しっかり圧迫解除（胸壁を完全に元に戻す）</p>
+  <p>・肘をまっすぐ伸ばして、体重をかけて圧迫する</p>
+  <p style="margin-top:6px;font-size:0.7rem;color:#555;">
+    ※ 深さはカメラからの相対値のため参考値です。総合スコアには含みません。
+  </p>
+</div>
+
+<!-- ============================================================
+     JavaScript（ES Module）
+     ============================================================ -->
+<script type="module">
+// ------------------------------------------------------------------
+// MediaPipe Tasks Vision の読み込み
+// ------------------------------------------------------------------
+import {
+  PoseLandmarker,
+  FilesetResolver
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+// ------------------------------------------------------------------
+// DOM 参照
+// ------------------------------------------------------------------
+const video      = document.getElementById('video');
+const canvas     = document.getElementById('canvas');
+const ctx        = canvas.getContext('2d');
+const elStatus   = document.getElementById('status-badge');
+const elAlerts   = document.getElementById('alerts');
+const elCompCnt  = document.getElementById('comp-count');
+const elBpmOver  = document.getElementById('bpm-overlay');
+const elBpmOVal  = document.getElementById('bpm-overlay-val');
+
+const btnStart    = document.getElementById('btn-start');
+const btnSound    = document.getElementById('btn-sound');
+const btnMetro    = document.getElementById('btn-metro');
+const btnFeedback = document.getElementById('btn-feedback');
+
+// 指標
+const elBpm      = document.getElementById('m-bpm');
+const elBpmSt    = document.getElementById('m-bpm-st');
+const elAngle    = document.getElementById('m-angle');
+const elAngleSt  = document.getElementById('m-angle-st');
+const elRhythm   = document.getElementById('m-rhythm');
+const elRhythmSt = document.getElementById('m-rhythm-st');
+const elDepth    = document.getElementById('m-depth');
+const elDepthSt  = document.getElementById('m-depth-st');
+const elDepthFil = document.getElementById('depth-fill');
+
+// スコア
+const elTotal    = document.getElementById('total-val');
+const elGrade    = document.getElementById('total-grade');
+const elSTempo   = document.getElementById('s-tempo');
+const elSAngle   = document.getElementById('s-angle');
+const elSRecoil  = document.getElementById('s-recoil');
+
+// ------------------------------------------------------------------
+// アプリ状態
+// ------------------------------------------------------------------
+let poseLandmarker = null;
+let mediaStream    = null;
+let animId         = null;
+let lastVidTime    = -1;
+let isRunning      = false;
+
+let soundOn   = false;
+let soundMode = 'metro';   // 'metro' | 'feedback'
+let audioCtx  = null;
+let metroTmr  = null;
+
+// ------------------------------------------------------------------
+// 信号処理バッファ
+// ------------------------------------------------------------------
+const SMOOTH_N       = 5;    // 移動平均ウィンドウ
+const MIN_COMP_INT   = 250;  // ms  最短圧迫間隔（240bpm上限）
+const MAX_COMP_INT   = 1000; // ms  最長圧迫間隔（60bpm下限）
+const MIN_AMP_THR    = 0.015; // 振幅が小さすぎる動きは無視
+
+let yBuf          = [];      // {t, y} 生の手首Y座標
+let smoothY       = null;    // 現在の平滑化Y
+let prevSmoothY   = null;
+let prevDy        = 0;
+
+// ピーク/バレー追跡
+let lastCompTime  = null;    // 最後の圧迫（ピーク）時刻
+let lastPeakY     = null;    // 最後の圧迫（最大Y）
+let lastValleyY   = null;    // 最後のリリース（最小Y）
+
+// インターバル履歴（直近8回）
+let intervals     = [];
+
+// セッション集計
+let session = {
+  startMs: null,
+  angles: [],
+  bpms: [],
+  recoils: [],      // true/false 配列
+  scores: [],
+  compressions: 0,
+};
+
+// 深さ（指数移動平均）
+let emaAmp = null;
+const EMA_K = 0.12;
+
+// アラート管理（同じメッセージの連続表示を防ぐ）
+const activeAlerts = new Map(); // msg → setTimeout ID
+
+// ------------------------------------------------------------------
+// MediaPipe 初期化
+// ------------------------------------------------------------------
+async function initMediaPipe() {
+  setStatus('MediaPipe 初期化中...');
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numPoses: 1,
+      minPoseDetectionConfidence: 0.45,
+      minPosePresenceConfidence: 0.45,
+      minTrackingConfidence: 0.45,
+    });
+    setStatus('準備完了 ▶ 開始を押してください');
+  } catch (e) {
+    setStatus('エラー: MediaPipe 読み込み失敗');
+    console.error(e);
+    showAlert('MediaPipe の読み込みに失敗しました。インターネット接続を確認してください。', 10000);
+  }
+}
+
+// ------------------------------------------------------------------
+// カメラ
+// ------------------------------------------------------------------
+async function startCamera() {
+  // --- セキュアコンテキスト（HTTPS）チェック ---
+  // getUserMedia は https:// か localhost でしか動かない。
+  // file:// で開くと navigator.mediaDevices が undefined になるため、
+  // ここで分かりやすいエラーを表示する。
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    const proto = location.protocol;
+    setStatus('カメラ利用不可（HTTPSが必要）');
+    showAlert(
+      `カメラを使えません（現在: ${proto}）。` +
+      `ファイルを直接開いた状態（file://）やHTTPではカメラがブロックされます。` +
+      `GitHub Pages などHTTPSのURLからアクセスしてください。`,
+      15000
+    );
+    return false;
+  }
+
+  try {
+    // 背面カメラ優先・フロントもフォールバック
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280, max: 1920 },
+        height: { ideal: 720,  max: 1080 },
+      },
+      audio: false,
+    };
+    mediaStream = await navigator.mediaDevices.getUserMedia(constraints).catch(() =>
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    );
+    video.srcObject = mediaStream;
+    await new Promise((res, rej) => {
+      video.onloadedmetadata = res;
+      video.onerror = rej;
+    });
+    // キャンバスをビデオサイズに合わせる
+    canvas.width  = video.videoWidth  || 640;
+    canvas.height = video.videoHeight || 480;
+    return true;
+  } catch (e) {
+    // エラー種別ごとに分かりやすいメッセージを出す
+    let msg;
+    switch (e.name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        msg = 'カメラの使用が許可されませんでした。ブラウザのアドレスバー横の「許可」設定を確認してください。';
+        break;
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        msg = 'カメラが見つかりませんでした。端末にカメラがあるか確認してください。';
+        break;
+      case 'NotReadableError':
+      case 'TrackStartError':
+        msg = 'カメラを開始できませんでした。他のアプリ（カメラ・ビデオ通話など）が使用中の可能性があります。';
+        break;
+      default:
+        msg = `カメラ起動失敗: ${e.name || ''} ${e.message || ''}`;
+    }
+    showAlert(msg, 10000);
+    setStatus('カメラエラー');
+    return false;
+  }
+}
+
+function stopCamera() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  video.srcObject = null;
+}
+
+// ------------------------------------------------------------------
+// メイン検出ループ
+// ------------------------------------------------------------------
+function startLoop() {
+  lastVidTime = -1;
+  animId = requestAnimationFrame(detectFrame);
+}
+
+function detectFrame(ts) {
+  if (!isRunning) return;
+  if (video.readyState >= 2 && video.currentTime !== lastVidTime) {
+    lastVidTime = video.currentTime;
+    const results = poseLandmarker.detectForVideo(video, ts);
+    handleResults(results, ts);
+  }
+  animId = requestAnimationFrame(detectFrame);
+}
+
+// ------------------------------------------------------------------
+// 結果処理
+// ------------------------------------------------------------------
+function handleResults(results, ts) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!results.landmarks || results.landmarks.length === 0) {
+    drawNoDetect();
+    showAlert('人物を検出できません。カメラの向きや距離を確認してください。');
+    return;
+  }
+
+  const lms = results.landmarks[0];
+
+  // どちらの腕が見えているか選ぶ（視認性の高い方）
+  const side = chooseSide(lms);
+  const iL   = side === 'L';
+  const SH   = lms[iL ? 11 : 12]; // 肩
+  const EL   = lms[iL ? 13 : 14]; // 肘
+  const WR   = lms[iL ? 15 : 16]; // 手首
+
+  // 骨格描画
+  drawSkeleton(lms, SH, EL, WR);
+
+  // --- 肘角度 ---
+  const angle = calcAngle(SH, EL, WR);
+  session.angles.push(angle);
+
+  // --- 手首Y 追跡 ---
+  trackY(WR.y, ts);
+
+  // --- 深さ相対スコア ---
+  const depthScore = calcDepthScore();
+
+  // --- スコア計算 ---
+  const sT = calcScoreTempo();
+  const sA = calcScoreAngle(angle);
+  const sR = calcScoreRecoil();
+  const tot = (sT !== null && sA !== null)
+    ? Math.round(0.4 * sT + 0.3 * sA + 0.3 * (sR ?? 50))
+    : null;
+
+  if (tot !== null) session.scores.push(tot);
+  const bpm = currentBPM();
+
+  // --- UI 更新 ---
+  updateMetrics(angle, bpm, depthScore);
+  updateScores(sT, sA, sR, tot);
+  checkWarnings(angle, bpm, depthScore);
+
+  // --- 音フィードバック（フィードバックモード）---
+  if (soundOn && soundMode === 'feedback' && bpm !== null) {
+    // 圧迫ごとに音を出すのではなく一定間隔で状態音を鳴らす（500ms毎）
+    // → 後述の feedbackTick で処理
+  }
+}
+
+// ------------------------------------------------------------------
+// どちらの腕を選ぶか
+// ------------------------------------------------------------------
+function chooseSide(lms) {
+  const lv = avg3vis(lms, 11, 13, 15);
+  const rv = avg3vis(lms, 12, 14, 16);
+  return lv >= rv ? 'L' : 'R';
+}
+function avg3vis(lms, a, b, c) {
+  return ((lms[a].visibility ?? 0) + (lms[b].visibility ?? 0) + (lms[c].visibility ?? 0)) / 3;
+}
+
+// ------------------------------------------------------------------
+// 角度計算（頂点 B での角度 A-B-C）
+// ------------------------------------------------------------------
+function calcAngle(A, B, C) {
+  const ax = A.x - B.x, ay = A.y - B.y;
+  const cx = C.x - B.x, cy = C.y - B.y;
+  const dot  = ax * cx + ay * cy;
+  const mag1 = Math.hypot(ax, ay);
+  const mag2 = Math.hypot(cx, cy);
+  if (mag1 === 0 || mag2 === 0) return 180;
+  return Math.acos(Math.max(-1, Math.min(1, dot / (mag1 * mag2)))) * (180 / Math.PI);
+}
+
+// ------------------------------------------------------------------
+// 骨格描画
+// ------------------------------------------------------------------
+function drawSkeleton(lms, SH, EL, WR) {
+  const W = canvas.width, H = canvas.height;
+
+  // 両腕の接続線
+  const pairs = [[11,13],[13,15],[12,14],[14,16],[11,12]];
+  ctx.lineWidth = 3;
+  pairs.forEach(([a, b]) => {
+    const la = lms[a], lb = lms[b];
+    if ((la.visibility ?? 0) > 0.3 && (lb.visibility ?? 0) > 0.3) {
+      ctx.strokeStyle = a === 11 && b === 12 ? 'rgba(255,220,50,0.7)' : 'rgba(50,255,140,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(la.x * W, la.y * H);
+      ctx.lineTo(lb.x * W, lb.y * H);
+      ctx.stroke();
+    }
+  });
+
+  // 関節点
+  const dotMap = {
+    11: '#ffe135', 12: '#ffe135',   // 肩：黄
+    13: '#ff8c00', 14: '#ff8c00',   // 肘：オレンジ
+    15: '#00e5ff', 16: '#00e5ff',   // 手首：シアン
+  };
+  [11, 12, 13, 14, 15, 16].forEach(i => {
+    const lm = lms[i];
+    if ((lm.visibility ?? 0) > 0.25) {
+      ctx.fillStyle = dotMap[i];
+      ctx.beginPath();
+      ctx.arc(lm.x * W, lm.y * H, i === 13 || i === 14 ? 8 : 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  // 肘角度テキスト
+  if (EL && (EL.visibility ?? 0) > 0.25) {
+    const ang = calcAngle(SH, EL, WR);
+    const color = ang >= 160 ? '#3fb950' : ang >= 140 ? '#d29922' : '#f85149';
+    ctx.save();
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillStyle = color;
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(`${Math.round(ang)}°`, EL.x * W + 12, EL.y * H - 8);
+    ctx.restore();
+  }
+}
+
+function drawNoDetect() {
+  ctx.fillStyle = 'rgba(180, 40, 40, 0.18)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = '18px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('人物を検出中...', canvas.width / 2, canvas.height / 2);
+  ctx.textAlign = 'left';
+}
+
+// ------------------------------------------------------------------
+// 手首Y座標の追跡 & ピーク/バレー検出
+// ------------------------------------------------------------------
+function trackY(rawY, ts) {
+  yBuf.push({ t: ts, y: rawY });
+  if (yBuf.length > 200) yBuf.shift();
+  if (yBuf.length < SMOOTH_N * 2) return;
+
+  // 移動平均
+  const slice = yBuf.slice(-SMOOTH_N);
+  const newSY = slice.reduce((s, v) => s + v.y, 0) / slice.length;
+  const dy    = prevSmoothY !== null ? newSY - prevSmoothY : 0;
+
+  // 符号が変わる点を検出（ゼロ交差）
+  if (prevDy > 0.0015 && dy < -0.0015) {
+    // ピーク（最大Y） = 圧迫最深部
+    onCompressionPeak(ts, prevSmoothY ?? newSY);
+  }
+  if (prevDy < -0.0015 && dy > 0.0015) {
+    // バレー（最小Y） = リリース（手の最高点）
+    onRelease(ts, prevSmoothY ?? newSY);
+  }
+
+  prevDy      = dy;
+  prevSmoothY = newSY;
+  smoothY     = newSY;
+}
+
+function onCompressionPeak(ts, peakY) {
+  // 振幅チェック（ノイズ除去）
+  const depth = lastValleyY !== null ? peakY - lastValleyY : 0;
+  if (depth < MIN_AMP_THR) return;
+
+  // 振幅の EMA 更新
+  emaAmp = emaAmp === null ? depth : EMA_K * depth + (1 - EMA_K) * emaAmp;
+
+  // テンポ計算
+  if (lastCompTime !== null) {
+    const intv = ts - lastCompTime;
+    if (intv >= MIN_COMP_INT && intv <= MAX_COMP_INT) {
+      intervals.push(intv);
+      if (intervals.length > 8) intervals.shift();
+      session.compressions++;
+      elCompCnt.textContent = `圧迫: ${session.compressions}回`;
+
+      // フィードバック音（圧迫検出時）
+      if (soundOn && soundMode === 'feedback') {
+        const bpm = currentBPM();
+        if (bpm !== null) {
+          if (bpm < 100)      playBeep(380, 0.12, 0.3);   // 低い音：遅い
+          else if (bpm > 120) playBeep(1400, 0.08, 0.25); // 高い音：速い
+          // 範囲内は無音
+        }
+      }
+    }
+  }
+
+  lastCompTime = ts;
+  lastPeakY    = peakY;
+}
+
+function onRelease(ts, valY) {
+  // リコイル判定
+  if (lastPeakY !== null && lastValleyY !== null) {
+    const depth    = lastPeakY - lastValleyY;
+    const threshold = lastValleyY + depth * 0.15; // 元の位置から15%以内に戻ればOK
+    session.recoils.push(valY <= threshold);
+  }
+  lastValleyY = valY;
+}
+
+// ------------------------------------------------------------------
+// 現在の BPM
+// ------------------------------------------------------------------
+function currentBPM() {
+  if (intervals.length === 0) return null;
+  const avg = intervals.reduce((s, v) => s + v, 0) / intervals.length;
+  return Math.round(60000 / avg);
+}
+
+// ------------------------------------------------------------------
+// 深さ相対スコア（0〜100、参考値）
+// ------------------------------------------------------------------
+function calcDepthScore() {
+  if (emaAmp === null) return 0;
+  // 振幅 0.04〜0.14（正規化座標）を 0〜100 にマッピング
+  const norm = (emaAmp - 0.03) / (0.13 - 0.03);
+  return Math.round(Math.max(0, Math.min(100, norm * 100)));
+}
+
+// ------------------------------------------------------------------
+// スコア計算
+// ------------------------------------------------------------------
+function calcScoreTempo() {
+  const bpm = currentBPM();
+  if (bpm === null || intervals.length < 2) return null;
+
+  // BPMに基づく基本点
+  let base;
+  if (bpm >= 100 && bpm <= 120)      base = 100;
+  else if (bpm >= 90 && bpm < 100)   base = 60 + (bpm - 90) * 4;     // 60〜100
+  else if (bpm > 120 && bpm <= 130)  base = 60 + (130 - bpm) * 4;    // 60〜100
+  else if (bpm >= 80 && bpm < 90)    base = (bpm - 80) * 6;           // 0〜60
+  else if (bpm > 130 && bpm <= 140)  base = (140 - bpm) * 6;          // 0〜60
+  else                               base = 0;
+
+  // リズムのばらつきペナルティ（変動係数 → 最大20点減）
+  if (intervals.length >= 3) {
+    const avg  = intervals.reduce((s, v) => s + v, 0) / intervals.length;
+    const sd   = Math.sqrt(intervals.reduce((s, v) => s + (v - avg) ** 2, 0) / intervals.length);
+    const cv   = sd / avg;
+    base = Math.max(0, base - Math.min(20, cv * 80));
+  }
+
+  return Math.round(base);
+}
+
+function calcScoreAngle(angle) {
+  if (angle == null) return null;
+  if (angle >= 160)       return 100;
+  if (angle >= 145)       return Math.round(60 + (angle - 145) * (40 / 15));
+  if (angle >= 120)       return Math.round((angle - 120) * (60 / 25));
+  return 0;
+}
+
+function calcScoreRecoil() {
+  if (session.recoils.length === 0) return null;
+  const good = session.recoils.filter(Boolean).length;
+  return Math.round((good / session.recoils.length) * 100);
+}
+
+// ------------------------------------------------------------------
+// UI 更新
+// ------------------------------------------------------------------
+function updateMetrics(angle, bpm, depthScore) {
+  // BPM
+  if (bpm !== null) {
+    elBpm.textContent = bpm;
+    elBpmOVal.textContent = bpm;
+    elBpmOver.style.display = 'block';
+    if (bpm >= 100 && bpm <= 120) {
+      setEl(elBpm, bpm, 'ok');
+      elBpmSt.textContent = '✓ 良好 (100〜120)';
+      elBpmSt.className = 'mstatus col-ok';
+      elBpmOVal.style.color = 'var(--green)';
+    } else if (bpm < 100) {
+      setEl(elBpm, bpm, 'bad');
+      elBpmSt.textContent = '▼ 遅い → ペースを上げて';
+      elBpmSt.className = 'mstatus col-bad';
+      elBpmOVal.style.color = 'var(--red)';
+    } else {
+      setEl(elBpm, bpm, 'bad');
+      elBpmSt.textContent = '▲ 速い → ペースを落として';
+      elBpmSt.className = 'mstatus col-bad';
+      elBpmOVal.style.color = 'var(--red)';
+    }
+  } else {
+    elBpm.textContent = '--';
+    elBpm.className = 'mval col-dim';
+    elBpmSt.textContent = '計測中（3回以上圧迫してください）';
+    elBpmSt.className = 'mstatus col-dim';
+  }
+
+  // リズム安定性（SD）
+  if (intervals.length >= 3) {
+    const avg = intervals.reduce((s, v) => s + v, 0) / intervals.length;
+    const sd  = Math.sqrt(intervals.reduce((s, v) => s + (v - avg) ** 2, 0) / intervals.length);
+    const sdR = Math.round(sd);
+    elRhythm.textContent = sdR;
+    if (sdR <= 30) {
+      setEl(elRhythm, sdR, 'ok');
+      elRhythmSt.textContent = '✓ 安定';
+      elRhythmSt.className = 'mstatus col-ok';
+    } else if (sdR <= 60) {
+      setEl(elRhythm, sdR, 'warn');
+      elRhythmSt.textContent = '△ やや不安定';
+      elRhythmSt.className = 'mstatus col-warn';
+    } else {
+      setEl(elRhythm, sdR, 'bad');
+      elRhythmSt.textContent = '✗ リズムを一定に';
+      elRhythmSt.className = 'mstatus col-bad';
+    }
+  } else {
+    elRhythm.textContent = '--';
+    elRhythm.className = 'mval col-dim';
+    elRhythmSt.textContent = '-';
+    elRhythmSt.className = 'mstatus col-dim';
+  }
+
+  // 肘角度
+  if (angle != null) {
+    elAngle.textContent = Math.round(angle);
+    if (angle >= 160) {
+      setEl(elAngle, Math.round(angle), 'ok');
+      elAngleSt.textContent = '✓ まっすぐ';
+      elAngleSt.className = 'mstatus col-ok';
+    } else if (angle >= 145) {
+      setEl(elAngle, Math.round(angle), 'warn');
+      elAngleSt.textContent = '△ やや曲がり';
+      elAngleSt.className = 'mstatus col-warn';
+    } else {
+      setEl(elAngle, Math.round(angle), 'bad');
+      elAngleSt.textContent = '✗ 肘を伸ばして！';
+      elAngleSt.className = 'mstatus col-bad';
+    }
+  }
+
+  // 深さゲージ
+  elDepth.textContent = depthScore;
+  elDepthFil.style.width = `${depthScore}%`;
+  if (depthScore >= 55) {
+    elDepthFil.style.background = 'var(--green)';
+    elDepthSt.textContent = '✓ 十分な深さ（参考）';
+    elDepthSt.className = 'mstatus col-ok';
+  } else if (depthScore >= 25) {
+    elDepthFil.style.background = 'var(--yellow)';
+    elDepthSt.textContent = '△ やや浅め（参考）';
+    elDepthSt.className = 'mstatus col-warn';
+  } else if (depthScore > 0) {
+    elDepthFil.style.background = 'var(--red)';
+    elDepthSt.textContent = '✗ 浅い可能性あり（参考）';
+    elDepthSt.className = 'mstatus col-bad';
+  } else {
+    elDepthFil.style.background = 'var(--muted)';
+    elDepthSt.textContent = '計測中...';
+    elDepthSt.className = 'mstatus col-dim';
+  }
+}
+
+function setEl(el, val, type) {
+  el.textContent = val;
+  el.className = 'mval ' + (type === 'ok' ? 'col-ok' : type === 'warn' ? 'col-warn' : 'col-bad');
+}
+
+function updateScores(sT, sA, sR, tot) {
+  renderSub(elSTempo,  sT);
+  renderSub(elSAngle,  sA);
+  renderSub(elSRecoil, sR);
+
+  if (tot === null) {
+    elTotal.textContent = '--';
+    elTotal.className   = 'col-dim';
+    elGrade.textContent = '計測中...';
+    elGrade.className   = 'col-dim';
+  } else {
+    elTotal.textContent = tot;
+    if (tot >= 80) {
+      elTotal.className = 'col-ok';
+      elGrade.textContent = '🟢 良好';
+      elGrade.className = 'col-ok';
+    } else if (tot >= 60) {
+      elTotal.className = 'col-warn';
+      elGrade.textContent = '🟡 改善の余地あり';
+      elGrade.className = 'col-warn';
+    } else {
+      elTotal.className = 'col-bad';
+      elGrade.textContent = '🔴 要改善';
+      elGrade.className = 'col-bad';
+    }
+  }
+}
+
+function renderSub(el, val) {
+  el.textContent = val !== null ? val : '--';
+  if (val === null) { el.className = 'sval col-dim'; return; }
+  el.className = 'sval ' + (val >= 80 ? 'col-ok' : val >= 60 ? 'col-warn' : 'col-bad');
+}
+
+// ------------------------------------------------------------------
+// 警告表示
+// ------------------------------------------------------------------
+function checkWarnings(angle, bpm, depthScore) {
+  if (angle != null && angle < 145) {
+    showAlert(`⚠ 肘が曲がっています (${Math.round(angle)}°) → 腕をまっすぐ伸ばしましょう`);
+  }
+  if (depthScore > 0 && depthScore < 25) {
+    showAlert('⚠ 深さが浅い可能性あり（参考） → 体重を乗せてしっかり押してください');
+  }
+  if (session.recoils.length >= 3) {
+    const last3bad = session.recoils.slice(-3).filter(v => !v).length;
+    if (last3bad >= 2) {
+      showAlert('⚠ リコイル不十分 → 毎回しっかり胸壁を元に戻してください');
+    }
+  }
+}
+
+function showAlert(msg, durationMs = 4000) {
+  if (activeAlerts.has(msg)) {
+    // タイマーを延長
+    clearTimeout(activeAlerts.get(msg).timer);
+  } else {
+    const div = document.createElement('div');
+    div.className = 'alert-item';
+    div.textContent = msg;
+    elAlerts.appendChild(div);
+    activeAlerts.set(msg, { el: div, timer: null });
+  }
+  const entry = activeAlerts.get(msg);
+  entry.timer = setTimeout(() => {
+    entry.el.remove();
+    activeAlerts.delete(msg);
+  }, durationMs);
+}
+
+// ------------------------------------------------------------------
+// 音声
+// ------------------------------------------------------------------
+function ensureAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playBeep(freq, duration, vol) {
+  const ac   = ensureAudioCtx();
+  const osc  = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.connect(gain);
+  gain.connect(ac.destination);
+  osc.type            = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
+  osc.start(ac.currentTime);
+  osc.stop(ac.currentTime + duration + 0.01);
+}
+
+function startMetronome() {
+  stopMetronome();
+  const iv = 60000 / 110; // 110 bpm
+  metroTmr = setInterval(() => {
+    if (soundOn && soundMode === 'metro') playBeep(900, 0.04, 0.22);
+  }, iv);
+}
+
+function stopMetronome() {
+  if (metroTmr) { clearInterval(metroTmr); metroTmr = null; }
+}
+
+// ------------------------------------------------------------------
+// セッション開始/停止
+// ------------------------------------------------------------------
+async function startSession() {
+  if (!poseLandmarker) {
+    showAlert('MediaPipe がまだ初期化中です。しばらくお待ちください。', 5000);
+    return;
+  }
+  const ok = await startCamera();
+  if (!ok) return;
+
+  // 状態リセット
+  yBuf = []; intervals = [];
+  prevSmoothY = null; prevDy = 0; smoothY = null;
+  lastCompTime = null; lastPeakY = null; lastValleyY = null; emaAmp = null;
+  session = { startMs: Date.now(), angles: [], bpms: [], recoils: [], scores: [], compressions: 0 };
+  activeAlerts.forEach(e => e.el.remove());
+  activeAlerts.clear();
+  document.getElementById('session-result').style.display = 'none';
+  elCompCnt.textContent = '圧迫: 0回';
+
+  isRunning = true;
+  btnStart.textContent = '■ 停止';
+  btnStart.classList.add('stop');
+  setStatus('解析中...');
+  elBpmOver.style.display = 'block';
+
+  if (soundOn && soundMode === 'metro') startMetronome();
+  startLoop();
+}
+
+function stopSession() {
+  isRunning = false;
+  if (animId) cancelAnimationFrame(animId);
+  stopCamera();
+  stopMetronome();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  btnStart.textContent = '▶ 開始';
+  btnStart.classList.remove('stop');
+  setStatus('停止中');
+  elBpmOver.style.display = 'none';
+
+  showSessionResult();
+}
+
+// ------------------------------------------------------------------
+// セッション結果表示
+// ------------------------------------------------------------------
+function showSessionResult() {
+  const durSec = session.startMs ? Math.round((Date.now() - session.startMs) / 1000) : 0;
+  const avgBPM = intervals.length > 0
+    ? Math.round(60000 / (intervals.reduce((s, v) => s + v, 0) / intervals.length))
+    : null;
+  const avgAngle = session.angles.length > 0
+    ? Math.round(session.angles.reduce((s, v) => s + v, 0) / session.angles.length)
+    : null;
+  const recoilPct = session.recoils.length > 0
+    ? Math.round(session.recoils.filter(Boolean).length / session.recoils.length * 100)
+    : null;
+  const avgScore = session.scores.length > 0
+    ? Math.round(session.scores.reduce((s, v) => s + v, 0) / session.scores.length)
+    : null;
+
+  const scoreColor = avgScore === null ? 'var(--muted)'
+    : avgScore >= 80 ? 'var(--green)'
+    : avgScore >= 60 ? 'var(--yellow)'
+    : 'var(--red)';
+
+  const sT = calcScoreTempo();
+  const sA = avgAngle !== null ? calcScoreAngle(avgAngle) : null;
+  const sR = recoilPct;
+
+  document.getElementById('session-content').innerHTML = `
+    <div class="result-grid">
+      <div class="result-big">
+        <div class="rb-label">平均総合スコア</div>
+        <div class="rb-val" style="color:${scoreColor}">${avgScore ?? '--'}</div>
+      </div>
+      <div class="result-big">
+        <div class="rb-label">総圧迫回数</div>
+        <div class="rb-val">${session.compressions}</div>
+      </div>
+    </div>
+    <table class="result-table">
+      <tr>
+        <td class="rlabel">セッション時間</td>
+        <td>${durSec} 秒</td>
+      </tr>
+      <tr>
+        <td class="rlabel">平均テンポ</td>
+        <td>${avgBPM !== null ? avgBPM + ' bpm' : '--'}</td>
+      </tr>
+      <tr>
+        <td class="rlabel">平均肘角度</td>
+        <td>${avgAngle !== null ? avgAngle + '°' : '--'}</td>
+      </tr>
+      <tr>
+        <td class="rlabel">リコイル率</td>
+        <td>${recoilPct !== null ? recoilPct + '%' : '--'}</td>
+      </tr>
+      <tr>
+        <td class="rlabel">テンポスコア (40%)</td>
+        <td>${sT !== null ? sT : '--'}</td>
+      </tr>
+      <tr>
+        <td class="rlabel">角度スコア (30%)</td>
+        <td>${sA !== null ? sA : '--'}</td>
+      </tr>
+      <tr>
+        <td class="rlabel">リコイルスコア (30%)</td>
+        <td>${sR !== null ? sR : '--'}</td>
+      </tr>
+    </table>
+  `;
+  document.getElementById('session-result').style.display = 'block';
+  document.getElementById('session-result').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ------------------------------------------------------------------
+// ユーティリティ
+// ------------------------------------------------------------------
+function setStatus(msg) {
+  elStatus.textContent = msg;
+}
+
+// ------------------------------------------------------------------
+// ボタンイベント
+// ------------------------------------------------------------------
+btnStart.addEventListener('click', () => {
+  isRunning ? stopSession() : startSession();
+});
+
+btnSound.addEventListener('click', () => {
+  soundOn = !soundOn;
+  ensureAudioCtx(); // iOS ではユーザー操作で AudioContext を開始する必要がある
+  if (soundOn) {
+    btnSound.textContent = '🔊 音: オン';
+    btnSound.classList.add('on');
+    if (isRunning && soundMode === 'metro') startMetronome();
+  } else {
+    btnSound.textContent = '🔇 音: オフ';
+    btnSound.classList.remove('on');
+    stopMetronome();
+  }
+});
+
+btnMetro.addEventListener('click', () => {
+  soundMode = 'metro';
+  btnMetro.classList.add('sel');
+  btnFeedback.classList.remove('sel');
+  if (soundOn && isRunning) startMetronome();
+});
+
+btnFeedback.addEventListener('click', () => {
+  soundMode = 'feedback';
+  btnFeedback.classList.add('sel');
+  btnMetro.classList.remove('sel');
+  stopMetronome();
+});
+
+// ------------------------------------------------------------------
+// 起動
+// ------------------------------------------------------------------
+initMediaPipe();
+
+</script>
+</body>
+</html>
