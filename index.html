@@ -483,6 +483,7 @@ const btnSound    = document.getElementById('btn-sound');
 const btnMetro    = document.getElementById('btn-metro');
 const btnFeedback = document.getElementById('btn-feedback');
 const btnReset    = document.getElementById('btn-reset');
+const elLogPanel  = document.getElementById('log-panel');
 const elLogList   = document.getElementById('log-list');
 const elLogCount  = document.getElementById('log-count');
 const btnLogClear = document.getElementById('btn-log-clear');
@@ -996,7 +997,8 @@ function updateMetrics(angle, bpm, depthScore) {
   }
 
   // リズム安定性（SD）
-  if (intervals.length >= 3) {
+  // 2区間（＝圧迫3回）あればSDを計算できる。早めに表示する。
+  if (intervals.length >= 2) {
     const avg = intervals.reduce((s, v) => s + v, 0) / intervals.length;
     const sd  = Math.sqrt(intervals.reduce((s, v) => s + (v - avg) ** 2, 0) / intervals.length);
     const sdR = Math.round(sd);
@@ -1014,6 +1016,12 @@ function updateMetrics(angle, bpm, depthScore) {
       elRhythmSt.textContent = '✗ リズムを一定に';
       elRhythmSt.className = 'mstatus col-bad';
     }
+  } else if (intervals.length === 1) {
+    // 1区間だけのときは計測中であることを示す
+    elRhythm.textContent = '…';
+    elRhythm.className = 'mval col-dim';
+    elRhythmSt.textContent = 'もう数回圧迫';
+    elRhythmSt.className = 'mstatus col-dim';
   } else {
     elRhythm.textContent = '--';
     elRhythm.className = 'mval col-dim';
@@ -1259,6 +1267,8 @@ async function startSession() {
   setStatus('解析中...');
   elBpmOver.style.display = 'block';
 
+  // 測定開始時はログを自動で折りたたむ（ライブ映像が見やすいように）
+  elLogPanel.open = false;
   logEvent('▶ 解析を開始しました', 'info');
 
   if (soundOn && soundMode === 'metro') startMetronome();
