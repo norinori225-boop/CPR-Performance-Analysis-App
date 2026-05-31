@@ -356,6 +356,7 @@
   <button class="mode-btn sel" id="btn-metro">🎵 メトロノーム</button>
   <button class="mode-btn" id="btn-feedback">⚡ 速遅判定</button>
   <span class="sep"></span>
+  <button id="btn-track">📍 検知: 手首</button>
   <button id="btn-reset">🔄 リセット</button>
 </div>
 
@@ -483,6 +484,7 @@ const btnSound    = document.getElementById('btn-sound');
 const btnMetro    = document.getElementById('btn-metro');
 const btnFeedback = document.getElementById('btn-feedback');
 const btnReset    = document.getElementById('btn-reset');
+const btnTrack    = document.getElementById('btn-track');
 const elLogPanel  = document.getElementById('log-panel');
 const elLogList   = document.getElementById('log-list');
 const elLogCount  = document.getElementById('log-count');
@@ -526,7 +528,15 @@ let metroTmr  = null;
 const SMOOTH_N       = 5;    // 移動平均ウィンドウ
 const MIN_COMP_INT   = 250;  // ms  最短圧迫間隔（240bpm上限）
 const MAX_COMP_INT   = 1000; // ms  最長圧迫間隔（60bpm下限）
-const MIN_AMP_THR    = 0.015; // 振幅が小さすぎる動きは無視
+
+// テンポ検知に使うランドマークと、その振幅前提のチューニング。
+// 肘は肩の支点に近いぶん上下動が小さくなるため、閾値を手首より小さく設定する。
+const TRACK_PRESETS = {
+  wrist: { label: '手首', minAmp: 0.015, depthLo: 0.03, depthHi: 0.13 },
+  elbow: { label: '肘',   minAmp: 0.009, depthLo: 0.018, depthHi: 0.08 },
+};
+let trackPoint = 'wrist';                 // 現在の検知点（既定は手首）
+let trackCfg   = TRACK_PRESETS.wrist;     // 現在のチューニング値
 
 let yBuf          = [];      // {t, y} 生の手首Y座標
 let smoothY       = null;    // 現在の平滑化Y
@@ -719,8 +729,8 @@ function handleResults(results, ts) {
   const angle = calcAngle(SH, EL, WR);
   session.angles.push(angle);
 
-  // --- 手首Y 追跡 ---
-  trackY(WR.y, ts);
+  // --- 上下動の追跡（検知点は手首/肘を切替可能）---
+  trackY(trackPoint === 'elbow' ? EL.y : WR.y, ts);
 
   // --- 深さ相対スコア ---
   const depthScore = calcDepthScore();
@@ -834,7 +844,7 @@ function drawNoDetect() {
 }
 
 // ------------------------------------------------------------------
-// 手首Y座標の追跡 & ピーク/バレー検出
+// 上下動Y座標の追跡 & ピーク/バレー検出（検知点は手首/肘を切替可能）
 // ------------------------------------------------------------------
 function trackY(rawY, ts) {
   yBuf.push({ t: ts, y: rawY });
@@ -862,9 +872,9 @@ function trackY(rawY, ts) {
 }
 
 function onCompressionPeak(ts, peakY) {
-  // 振幅チェック（ノイズ除去）
+  // 振幅チェック（ノイズ除去）。検知点に応じた閾値を使う。
   const depth = lastValleyY !== null ? peakY - lastValleyY : 0;
-  if (depth < MIN_AMP_THR) return;
+  if (depth < trackCfg.minAmp) return;
 
   // 振幅の EMA 更新
   emaAmp = emaAmp === null ? depth : EMA_K * depth + (1 - EMA_K) * emaAmp;
@@ -918,8 +928,8 @@ function currentBPM() {
 // ------------------------------------------------------------------
 function calcDepthScore() {
   if (emaAmp === null) return 0;
-  // 振幅 0.04〜0.14（正規化座標）を 0〜100 にマッピング
-  const norm = (emaAmp - 0.03) / (0.13 - 0.03);
+  // 検知点ごとの振幅レンジ（depthLo〜depthHi）を 0〜100 にマッピング
+  const norm = (emaAmp - trackCfg.depthLo) / (trackCfg.depthHi - trackCfg.depthLo);
   return Math.round(Math.max(0, Math.min(100, norm * 100)));
 }
 
@@ -1419,6 +1429,16 @@ btnReset.addEventListener('click', () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   setStatus(isRunning ? '解析中...（リセットしました）' : '停止中');
   showAlert('計測をリセットしました', 2000);
+});
+
+// テンポ検知点の切替（手首 ⇄ 肘）。閾値も自動で切り替わる。
+// 計測途中で支点が変わると振幅履歴が混ざるため、リセットして測り直す。
+btnTrack.addEventListener('click', () => {
+  trackPoint = (trackPoint === 'wrist') ? 'elbow' : 'wrist';
+  trackCfg   = TRACK_PRESETS[trackPoint];
+  btnTrack.textContent = `📍 検知: ${trackCfg.label}`;
+  resetState();
+  logEvent(`検知点を「${trackCfg.label}」に切り替えました`, 'info');
 });
 
 // ログ消去
